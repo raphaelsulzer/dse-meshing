@@ -20,6 +20,13 @@ import polyscope as ps
 from contextlib import contextmanager,redirect_stderr,redirect_stdout
 from os import devnull
 
+from tqdm import tqdm
+sys.path.append("/home/raphael/remote_python/benchmark")
+from datasets.modelnet10 import ModelNet10
+from datasets.shapenet import ShapeNet
+
+
+
 @contextmanager
 def suppress_stdout_stderr():
     """A context manager that redirects stdout and stderr to devnull"""
@@ -27,6 +34,21 @@ def suppress_stdout_stderr():
         with redirect_stderr(fnull) as err, redirect_stdout(fnull) as out:
             yield (err, out)
 
+
+# def sample(shape, n_points):
+#     print('sampling {} vertices evenly'.format(n_points))
+#     with suppress_stdout_stderr():
+#         X3D, X3D_face_idx = trimesh.sample.sample_surface_even(shape, n_points)
+#         i=1000
+#         while len(X3D)<n_points:
+#             print("try sample again", len(X3D))
+#             X3D, X3D_face_idx = trimesh.sample.sample_surface_even(shape, n_points+i)
+#             i+=1000
+#             if len(X3D)>n_points:
+#                 idx = np.random.choice(len(X3D), n_points, replace=False)
+#                 X3D = X3D[idx]
+#                 X3D_face_idx = X3D_face_idx[idx]
+#     return X3D, X3D_face_idx
 
 def sample(shape, n_points):
     print('sampling {} vertices evenly'.format(n_points))
@@ -42,7 +64,6 @@ def sample(shape, n_points):
                 X3D = X3D[idx]
                 X3D_face_idx = X3D_face_idx[idx]
     return X3D, X3D_face_idx
-
 
 def load_geo_data(filename, n_points, euclidian_neighbors):
     print('loading geodesic data for ', filename)
@@ -144,40 +165,46 @@ def prepare_patches(logmap_points,logmap_neighbors,logmap_maps, sampled_logmap_p
     return patches
 
 #######################################################################################################
-def main(mesh_dataset_path, output_dataset_path,  n_logmap_points, n_logmap_neighbours, n_sampled_logmap_points):
-    fns = os.listdir(mesh_dataset_path)
-    fns = [x for x in fns if x.endswith(".ply")]
+def main(n_logmap_points, n_logmap_neighbours, n_sampled_logmap_points):
+
+    dataset = ShapeNet()
+    split = "train"
+    models = dataset.getModels(scan="4", reduce=0.01, splits=[split])
+    path = "/mnt/raphael/ShapeNet"
+
 
     n_shape = 0
     valid_shapes = []
     start = 0
     n_shape = len(valid_shapes)
-    for fn in fns[start:]:
-        logmap_points, logmap_data, res,sampled_logmap_points = load_and_sample(os.path.join(mesh_dataset_path, fn), n_logmap_points, n_logmap_neighbours, n_sampled_logmap_points)
-        logmap_neighbors = logmap_data[:,:,0].astype(int)
-        logmap_maps = logmap_data[:,:,1:]
-        patches = prepare_patches(logmap_points,logmap_neighbors,logmap_maps,sampled_logmap_points)
-        convert_to(patches, "logmap_patches_{}".format(n_shape), output_dataset_path)
-        np.save(os.path.join(output_dataset_path,"patches_{}.npy".format(n_shape)), patches)
-        np.save(os.path.join(output_dataset_path,"sampled_points_{}.npy".format(n_shape)), sampled_logmap_points)
+    for m in tqdm(models["train"],ncols=50):
+        try:
+            fn = "mesh.off"
+            mesh_dataset_path = os.path.join(path,m["class"],m["model"],"mesh")
+            output_dataset_path = os.path.join(path,m["class"],m["model"],"dse")
+            os.makedirs(output_dataset_path,exist_ok=True)
 
-        np.save(os.path.join(output_dataset_path,"logmap_points_{}.npy".format(n_shape)), logmap_points)
-        if res==0:
-            valid_shapes.append(fn)
-            n_shape+=1
-        text_file = open(os.path.join(output_dataset_path, "valid_files_list.txt"), "w")
-        text_file.write("\n".join(valid_shapes))
-        text_file.close()
+            logmap_points, logmap_data, res,sampled_logmap_points = load_and_sample(os.path.join(mesh_dataset_path, fn), n_logmap_points, n_logmap_neighbours, n_sampled_logmap_points)
+            logmap_neighbors = logmap_data[:,:,0].astype(int)
+            logmap_maps = logmap_data[:,:,1:]
+            patches = prepare_patches(logmap_points,logmap_neighbors,logmap_maps,sampled_logmap_points)
+            convert_to(patches, "logmap_patches", output_dataset_path)
+            np.save(os.path.join(output_dataset_path,"patches.npy"), patches)
+            np.save(os.path.join(output_dataset_path,"sampled_points.npy"), sampled_logmap_points)
+
+            np.save(os.path.join(output_dataset_path,"logmap_points.npy"), logmap_points)
+            if res==0:
+                valid_shapes.append(str(os.path.join(m["class"],m["model"])))
+                n_shape+=1
+            text_file = open(os.path.join(path, "dse_valid_files_list.txt"), "w")
+            text_file.write("\n".join(valid_shapes))
+            text_file.close()
+        except:
+            pass
 
 if __name__ == '__main__':
-    data_path = 'data'
-    output_path = 'data/dataset'
-    if not os.path.exists(output_path):
-        os.makedirs(output_path)
-    if not os.path.exists("tmp_files"):
-        os.makedirs("tmp_files")
 
     n_logmap_points = 10000
     n_logmap_neighbours = 200
     n_sampled_logmap_points =  1000
-    main(data_path, output_path, n_logmap_points, n_logmap_neighbours, n_sampled_logmap_points)
+    main(n_logmap_points, n_logmap_neighbours, n_sampled_logmap_points)

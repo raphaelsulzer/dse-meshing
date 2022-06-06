@@ -152,6 +152,9 @@ def reconstruct(name,classifier_model, logmap_model, in_path, res_path):
 
 
 if __name__ == '__main__':
+
+    
+
     in_path = os.path.join(ROOT_DIR, 'data/test_data')
     res_path = os.path.join(ROOT_DIR, 'data/test_data/raw_prediction')
     if not os.path.exists(res_path): os.mkdir(res_path)
