@@ -4,8 +4,10 @@ import trimesh
 import tensorflow as tf
 from sklearn.neighbors import KDTree
 import numpy as np
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ROOT_DIR = os.path.dirname(BASE_DIR)
+
+# BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = "/home/raphael/remote_python/dse-meshing"
+# ROOT_DIR = os.path.dirname(BASE_DIR)
 sys.path.append(os.path.join(ROOT_DIR, 'utils'))
 sys.path.append(os.path.join(ROOT_DIR, 'train_logmap'))
 import delaunay_tf
@@ -14,12 +16,17 @@ import pointnet_seg as model
 BATCH_SIZE = 128
 os.environ["CUDA_VISIBLE_DEVICES"]="0"
 RESIZE=True
+n_neighbors = 120
+n_nearest_neighbors = 30
+
+
+
 def safe_norm(x, epsilon=1e-8, axis=None):
     return tf.sqrt(tf.maximum(tf.reduce_sum(tf.square(x) , axis=axis), epsilon))
 
 def init_config():
-    tf.reset_default_graph()
-    config = tf.ConfigProto()
+    tf.compat.v1.reset_default_graph()
+    config = tf.compat.v1.ConfigProto()
     config.gpu_options.allow_growth = True
     config.allow_soft_placement = True
     config.log_device_placement = False
@@ -35,7 +42,7 @@ def resize(neighbor_points0):
 def geodesic_patch(neighbor_coordinates0,neighbors_index0, is_training):
     center_index = neighbors_index0[:,:1]
     center_coordinates = neighbor_coordinates0[:,:1]
-    with tf.variable_scope("learn_geo_dist"):
+    with tf.compat.v1.variable_scope("learn_geo_dist"):
         geo_distances = model.classifier(neighbor_coordinates0, is_training,  batch_size=BATCH_SIZE, activation=tf.nn.relu)
     geo_distances = tf.squeeze(tf.math.sigmoid(geo_distances), axis = 2)
     closests = tf.math.top_k(geo_distances[:,1:], k=n_nearest_neighbors)[1]
@@ -60,8 +67,8 @@ def init_graph(X3D, n_neighbors,classifier_model, logmap_model):
     current_type = tf.float32
     with tf.device('/gpu:'+str(0)):
         coord_3D = tf.constant(X3D,  dtype=tf.float32)
-        points_neighbors0 = tf.placeholder(tf.int32, shape=[BATCH_SIZE, n_neighbors+1])
-        first_index_pl = tf.placeholder(tf.int32, shape=[BATCH_SIZE,])
+        points_neighbors0 = tf.compat.v1.placeholder(tf.int32, shape=[BATCH_SIZE, n_neighbors+1])
+        first_index_pl = tf.compat.v1.placeholder(tf.int32, shape=[BATCH_SIZE,])
         is_training = tf.constant(False, dtype = tf.bool)
         neighbor_points0 = tf.gather(coord_3D, points_neighbors0)
         neighbor_points0 = neighbor_points0 - tf.tile(neighbor_points0[:,:1],[1, n_neighbors+1, 1])
@@ -69,7 +76,7 @@ def init_graph(X3D, n_neighbors,classifier_model, logmap_model):
         if RESIZE:
             neighbor_points0 = resize(neighbor_points0)
         neighbor_points,  points_neighbors =  geodesic_patch(neighbor_points0,points_neighbors0, is_training)
-        with tf.variable_scope("learn_logmap"):
+        with tf.compat.v1.variable_scope("learn_logmap"):
             map = model.logmap(neighbor_points, is_training,  batch_size=BATCH_SIZE,activation=tf.nn.relu)
         predicted_map = tf.concat([ map, tf.zeros([ map.shape[0],  map.shape[1], 1])], axis = 2)
 
@@ -78,17 +85,20 @@ def init_graph(X3D, n_neighbors,classifier_model, logmap_model):
                                                                                     gdist_neighbors =points_neighbors[:,1:],
                                                                                     first_index =first_index_pl)
 
-        logmap_var = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='learn_logmap')
-        saver_logmap= tf.train.Saver(var_list = logmap_var)
-        classifier_var = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='learn_geo_dist')
-        saver_classifier= tf.train.Saver(var_list = classifier_var)
+        logmap_var = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES, scope='learn_logmap')
+        saver_logmap= tf.compat.v1.train.Saver(var_list = logmap_var)
+        classifier_var = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES, scope='learn_geo_dist')
+        saver_classifier= tf.compat.v1.train.Saver(var_list = classifier_var)
 
-        init = tf.global_variables_initializer()
+        # init = tf.global_variables_initializer()
+        init = tf.compat.v1.global_variables_initializer()
 
-    session = tf.Session(config=config)
+    # session = tf.Session(config=config)
+    session = tf.compat.v1.Session(config=config)
     session.run(init)
 
-    saver = tf.train.Saver()
+    # saver = tf.train.Saver()
+    saver = tf.compat.v1.train.Saver()
 
     saver_logmap.restore(session,logmap_model)
     saver_classifier.restore(session,classifier_model)
@@ -102,10 +112,12 @@ def init_graph(X3D, n_neighbors,classifier_model, logmap_model):
         "predicted_map": predicted_map}
     return session, ops
 
-def reconstruct(name,classifier_model, logmap_model, in_path, res_path):
-    logmap_points = np.loadtxt(os.path.join(in_path, name))
-    name = name.replace('.xyz', "")
-    X3D = logmap_points[:,:3]
+def reconstruct(name,classifier_model, logmap_model,outpath):
+    # logmap_points = np.loadtxt(os.path.join(in_path, name))
+    # name = name.replace('.xyz', "")
+    # X3D = logmap_points[:,:3]
+    X3D = np.load(name)["points"]
+
     tree = KDTree(X3D)
     X3D_normals = np.zeros([X3D.shape[0],3])
     X3D_normals[:,2] = 1
@@ -146,14 +158,21 @@ def reconstruct(name,classifier_model, logmap_model, in_path, res_path):
     predicted_neighborhood_indices = np.concatenate(predicted_neighborhood_indices)
 
 
-    np.save(os.path.join(res_path,"predicted_map_{}.npy".format(name)), predicted_map)
-    np.save(os.path.join(res_path,"predicted_neighborhood_indices_{}.npy".format(name)), predicted_neighborhood_indices)
-    trimesh.Trimesh(X3D, indices[triangles>0.5]).export(os.path.join(res_path, "predicted_raw_mesh_{}.ply".format(name)))
+    # outpath = os.path.join(os.path.dirname(name),"..","dse")
+    # os.makedirs(outpath,exist_ok=True)
+
+    np.save(os.path.join(outpath,"predicted_map.npy"), predicted_map)
+    np.save(os.path.join(outpath,"predicted_neighborhood_indices.npy"), predicted_neighborhood_indices)
+    trimesh.Trimesh(X3D, indices[triangles>0.5]).export(os.path.join(outpath, "predicted_raw_mesh.ply"))
+
+    # np.save(os.path.join(res_path,"predicted_map_{}.npy".format(name)), predicted_map)
+    # np.save(os.path.join(res_path,"predicted_neighborhood_indices_{}.npy".format(name)), predicted_neighborhood_indices)
+    # trimesh.Trimesh(X3D, indices[triangles>0.5]).export(os.path.join(res_path, "predicted_raw_mesh_{}.ply".format(name)))
 
 
 if __name__ == '__main__':
 
-    
+
 
     in_path = os.path.join(ROOT_DIR, 'data/test_data')
     res_path = os.path.join(ROOT_DIR, 'data/test_data/raw_prediction')

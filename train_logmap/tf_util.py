@@ -18,7 +18,7 @@ def _variable_on_cpu(name, shape, initializer, use_fp16=False):
   """
   with tf.device('/cpu:0'):
     dtype = tf.float16 if use_fp16 else tf.float32
-    var = tf.get_variable(name, shape, initializer=initializer, dtype=dtype)
+    var = tf.compat.v1.get_variable(name, shape, initializer=initializer, dtype=dtype)
   return var
 
 def _variable_with_weight_decay(name, shape, stddev, wd, use_xavier=True):
@@ -45,7 +45,7 @@ def _variable_with_weight_decay(name, shape, stddev, wd, use_xavier=True):
   var = _variable_on_cpu(name, shape, initializer)
   if wd is not None:
     weight_decay = tf.multiply(tf.nn.l2_loss(var), wd, name='weight_loss')
-    tf.add_to_collection('losses', weight_decay)
+    tf.compat.v1.add_to_collection('losses', weight_decay)
   return var
 
 
@@ -142,7 +142,7 @@ def conv2d(inputs,
   Returns:
     Variable tensor
   """
-  with tf.variable_scope(scope,reuse=tf.AUTO_REUSE) as sc:
+  with tf.variable_scope(scope,reuse=tf.compat.v1.AUTO_REUSE) as sc:
       kernel_h, kernel_w = kernel_size
       num_in_channels = inputs.get_shape()[-1].value
       kernel_shape = [kernel_h, kernel_w,
@@ -364,7 +364,7 @@ def max_pool2d(inputs,
   with tf.variable_scope(scope) as sc:
     kernel_h, kernel_w = kernel_size
     stride_h, stride_w = stride
-    outputs = tf.nn.max_pool(inputs,
+    outputs = tf.nn.max_pool2d(inputs,
                              ksize=[1, kernel_h, kernel_w, 1],
                              strides=[1, stride_h, stride_w, 1],
                              padding=padding,

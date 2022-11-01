@@ -9,6 +9,8 @@ import functools
 import multiprocessing
 from multiprocessing import RawArray
 
+n_nearest_neighbors = 30
+
 
 def ICP(X, Y):
     n_pc_points = X.shape[1]

@@ -7,11 +7,12 @@ import pickle
 import trimesh
 BBOX = 1000.0 # we resize the shape to this bounding box to avoid numerical errors in the (external) postprocessing code
 
-def write_candidates(file):
-    points = np.loadtxt(os.path.join(in_path, "{}.xyz".format(file)))
+def write_candidates(file,dse_path):
+    # points = np.loadtxt(os.path.join(in_path, "{}.xyz".format(file)))
+    points=np.load(file)["points"]
     bbox_diag = np.linalg.norm(np.max(points, axis = 0)-np.min(points, axis = 0))
     points*=BBOX/bbox_diag
-    trig_probs = np.load(os.path.join(align_path, "patch_frequency_count_{}.npy".format(file)))
+    trig_probs = np.load(os.path.join(dse_path, "patch_frequency_count.npy".format(file)))
 
     indices = np.reshape(trig_probs[:,:3], [-1, 3])
     labels = np.reshape(trig_probs[:,3:], [-1])
@@ -25,7 +26,7 @@ def write_candidates(file):
     content+= "\n".join([" ".join(list(x)) for x in points.astype(str)]) + '\n'
     content+= str(len(indices)) + '\n'
     content+= "\n".join([" ".join(list(x)) for x in bins])
-    with open(os.path.join(res_path, "pred_{}.txt".format(file)), 'w') as f:
+    with open(os.path.join(dse_path, "pred.txt"), 'w') as f:
         f.write(content)
     return bbox_diag
 

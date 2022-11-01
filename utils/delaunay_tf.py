@@ -43,8 +43,8 @@ def compute_intersections(half_planes, couples):
     # compute the intersections between the couples of half planes
     inter = tf.linalg.cross(tf.gather(half_planes,couples[:,0], axis=1), tf.gather(half_planes,couples[:,1], axis=1))
     mask = tf.abs(inter[:,:,2])<config.EPS
-    inter = tf.divide(inter,tf.tile(tf.expand_dims(tf.where(mask, tf.ones_like(inter[:,:,2]),inter[:,:,2]), 2),[1, 1,3])) # what to do if no intersection?
-    inter = tf.where(tf.tile(mask[:,:,tf.newaxis], [1, 1, 3]), tf.ones_like(inter)*10.0,inter)# if no intersection put point far away
+    inter = tf.divide(inter,tf.tile(tf.expand_dims(tf.compat.v1.where(mask, tf.ones_like(inter[:,:,2]),inter[:,:,2]), 2),[1, 1,3])) # what to do if no intersection?
+    inter = tf.compat.v1.where(tf.tile(mask[:,:,tf.newaxis], [1, 1, 3]), tf.ones_like(inter)*10.0,inter)# if no intersection put point far away
     return inter
 
 

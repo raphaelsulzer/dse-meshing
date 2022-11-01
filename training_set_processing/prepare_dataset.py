@@ -81,15 +81,17 @@ def write_geo_data(mesh_file, chosen_vertex_file, output_file, neighbors_file):
     print('logmap c++ run status:', result)
     return result
 
-def compute_logmap(data, n_logmap_points, n_logmap_neighbours,n_sampled_logmap_points, name):
+def compute_logmap(scan,data, n_logmap_points, n_logmap_neighbours,n_sampled_logmap_points, name):
     # sample logmap points
-    X3D, _ = sample(data, n_logmap_points)
+    # X3D, _ = sample(data, n_logmap_points)
+    X3D = np.load(scan)["points"]
+
     original_mesh_tree = KDTree(data.vertices)
     original_mesh_mapping = original_mesh_tree.query(X3D)[1].reshape(-1)
-    if len(set(original_mesh_mapping))<10000:
+    if len(set(original_mesh_mapping))<n_logmap_points:
         remain =  list(set(list(range(len(data.vertices))))-set(original_mesh_mapping) )
         random.shuffle(remain)
-        remain = remain[:10000 - len(set(original_mesh_mapping))]
+        remain = remain[:n_logmap_points - len(set(original_mesh_mapping))]
         original_mesh_mapping =np.array(list(set(original_mesh_mapping)) + remain)
 
 
@@ -117,7 +119,7 @@ def compute_logmap(data, n_logmap_points, n_logmap_neighbours,n_sampled_logmap_p
 
 
 
-def load_and_sample(mesh_filename,  n_logmap_points, n_logmap_neighbours, n_sampled_logmap_points):
+def load_and_sample(scan,mesh_filename,  n_logmap_points, n_logmap_neighbours, n_sampled_logmap_points):
     #data = [trimesh.load(os.path.join(root, fn), process=False) for fn in fns]
     #mesh = o3d.io.read_triangle_mesh(mesh_filename)
     #mesh = trimesh.Trimesh(np.asarray(mesh.vertices), np.asarray(mesh.triangles), process=True )
@@ -126,24 +128,24 @@ def load_and_sample(mesh_filename,  n_logmap_points, n_logmap_neighbours, n_samp
     #    mesh = mesh.split()[0]
     mesh = trimesh.load(mesh_filename, process=True)
     mesh.merge_vertices()
-    n_vertices = len(mesh.vertices)
     mesh.vertices = mesh.vertices -np.mean(mesh.vertices,0)
     mesh.vertices/=mesh.scale
     # resize mesh
     print("subdividing mesh:",mesh_filename)
 
-    while len(mesh.vertices)<100000:
-        mesh = mesh.subdivide()
+    # while len(mesh.vertices)<100000:
+    while len(mesh.vertices) < 10000:
+            mesh = mesh.subdivide()
     print(len(mesh.vertices), "vertices")
     name = mesh_filename.split("/")[1].replace(".ply", "")
-    logmap_points, logmap_data, res, sampled_logmap_points = compute_logmap(mesh, n_logmap_points, n_logmap_neighbours,n_sampled_logmap_points, name)
+    logmap_points, logmap_data, res, sampled_logmap_points = compute_logmap(scan,mesh, n_logmap_points, n_logmap_neighbours,n_sampled_logmap_points, name)
     return logmap_points, logmap_data, res, sampled_logmap_points
 
 def convert_to(patch_data, name, root):
   """Converts a dataset to tfrecords."""
   filename = os.path.join(root, name + '.tfrecords')
   print('Writing', filename)
-  writer = tf.python_io.TFRecordWriter(filename)
+  writer = tf.io.TFRecordWriter(filename)
   for index in range(len(patch_data)):
       feature = {
         'patches': tf.train.Feature(float_list=tf.train.FloatList(value=patch_data[index].flatten())),
@@ -169,22 +171,20 @@ def main(n_logmap_points, n_logmap_neighbours, n_sampled_logmap_points):
 
     dataset = ShapeNet()
     split = "train"
-    models = dataset.getModels(scan="4", reduce=0.01, splits=[split])
+    models = dataset.getModels(scan="4", reduce=0.005, splits=[split])[split]
     path = "/mnt/raphael/ShapeNet"
 
 
-    n_shape = 0
     valid_shapes = []
-    start = 0
     n_shape = len(valid_shapes)
-    for m in tqdm(models["train"],ncols=50):
+    for m in tqdm(models,ncols=50):
         try:
             fn = "mesh.off"
             mesh_dataset_path = os.path.join(path,m["class"],m["model"],"mesh")
             output_dataset_path = os.path.join(path,m["class"],m["model"],"dse")
             os.makedirs(output_dataset_path,exist_ok=True)
 
-            logmap_points, logmap_data, res,sampled_logmap_points = load_and_sample(os.path.join(mesh_dataset_path, fn), n_logmap_points, n_logmap_neighbours, n_sampled_logmap_points)
+            logmap_points, logmap_data, res,sampled_logmap_points = load_and_sample(m["scan"],os.path.join(mesh_dataset_path, fn), n_logmap_points, n_logmap_neighbours, n_sampled_logmap_points)
             logmap_neighbors = logmap_data[:,:,0].astype(int)
             logmap_maps = logmap_data[:,:,1:]
             patches = prepare_patches(logmap_points,logmap_neighbors,logmap_maps,sampled_logmap_points)
@@ -204,7 +204,13 @@ def main(n_logmap_points, n_logmap_neighbours, n_sampled_logmap_points):
 
 if __name__ == '__main__':
 
-    n_logmap_points = 10000
-    n_logmap_neighbours = 200
-    n_sampled_logmap_points =  1000
+    ## ori params
+    # n_logmap_points = 10000
+    # n_logmap_neighbours = 200
+    # n_sampled_logmap_points =  1000
+
+
+    n_logmap_points = 3000
+    n_logmap_neighbours = 60
+    n_sampled_logmap_points =  300
     main(n_logmap_points, n_logmap_neighbours, n_sampled_logmap_points)

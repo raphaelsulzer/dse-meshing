@@ -11,6 +11,9 @@ from sklearn.neighbors import KDTree
 import delaunay_tf
 BATCH_SIZE = 128
 
+n_neighbors = 120
+n_nearest_neighbors = 30
+
 def init_config():
     tf.reset_default_graph()
     config = tf.ConfigProto()
@@ -38,12 +41,12 @@ def init_graph(X3D,X3D_normals, n_neighbors):
 
 
 
-        init = tf.global_variables_initializer()
+        init = tf.compat.v1.global_variables_initializer()
 
-    session = tf.Session(config=config)
+    session = tf.compat.v1.Session(config=config)
     session.run(init)
 
-    saver = tf.train.Saver()
+    saver = tf.compat.v1.train.Saver()
 
     ops = {"corrected_indices":corrected_indices,
             "corrected_approx_triangles":corrected_approx_triangles,
@@ -52,9 +55,15 @@ def init_graph(X3D,X3D_normals, n_neighbors):
             "corrected_points_neighbors":corrected_points_neighbors,}
     return session, ops
 
-def reconstruct(name):
-    logmap_points = np.loadtxt(os.path.join(in_path, name))
-    name = name.replace('.xyz', "")
+def align_meshes(name,dse_path):
+
+
+
+    # logmap_points = np.loadtxt(os.path.join(in_path, name))
+    # name = name.replace('.xyz', "")
+    # X3D = logmap_points
+
+    logmap_points = np.load(name)["points"]
     X3D = logmap_points
     tree = KDTree(logmap_points)
     X3D_normals = np.zeros([X3D.shape[0],3])
@@ -64,8 +73,8 @@ def reconstruct(name):
     session,ops= init_graph(X3D,X3D_normals, n_neighbors)
     points_indices =list(range(n_points))
 
-    predicted_neighborhood_indices = np.load(os.path.join(raw_prediction_path,"predicted_neighborhood_indices_{}.npy".format(name)))#np.load("icp_consistency_results/predicted_neighborhood_indices.npy" )
-    corrected_predicted_map = np.load(os.path.join(res_path, "corrected_maps_{}.npy".format(name)))
+    predicted_neighborhood_indices = np.load(os.path.join(dse_path,"predicted_neighborhood_indices.npy"))#np.load("icp_consistency_results/predicted_neighborhood_indices.npy" )
+    corrected_predicted_map = np.load(os.path.join(dse_path, "corrected_maps.npy"))
 
     triangles = []
     indices = []
@@ -94,8 +103,8 @@ def reconstruct(name):
 
     trigs = np.sort(np.reshape(indices[triangles>0.5],[-1,3]), axis = 1)
     uni,inverse, count = np.unique(trigs, return_counts=True, axis=0, return_inverse=True)
-    triangle_occurence = count[inverse]
-    np.save(os.path.join(res_path, "patch_frequency_count_{}.npy".format(name)), np.concatenate([uni, count[:,np.newaxis]], axis = 1) )
+    # triangle_occurence = count[inverse]
+    np.save(os.path.join(dse_path, "patch_frequency_count.npy"), np.concatenate([uni, count[:,np.newaxis]], axis = 1) )
 
 
 if __name__ == '__main__':
@@ -111,4 +120,4 @@ if __name__ == '__main__':
     files = [x for x in files if x.endswith('.xyz')]
 
     for name in files:
-        reconstruct(name)
+        align_meshes(name)

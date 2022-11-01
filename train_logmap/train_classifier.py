@@ -33,7 +33,8 @@ TRAINING_SHAPES = list(set(list(range(56))) - set(TESTING_SHAPES))
 N_TRAINING_SHAPES = len(TRAINING_SHAPES)
 print(N_TRAINING_SHAPES)
 N_TESTING_SHAPES = len(TESTING_SHAPES)
-LOG_DIR = "log/log_famousthingi_classifier"
+# LOG_DIR = "log/log_famousthingi_classifier"
+LOG_DIR = "/mnt/raphael/ShapeNet/log_shapenet_classifier"
 n_patches = 10000
 path_records = "../data/training_data/famousthingi_logmap_patches_{}.tfrecords"
 
@@ -50,7 +51,6 @@ def init_graph():
 
             val_iterator, _ =tf_dataset.dataset([path_records.format(k) for k in TESTING_SHAPES]
                             ,batch_size=BATCH_SIZE,n_patches=n_patches,n_neighbors=N_ORIG_NEIGHBORS)
-
 
             handle = tf.placeholder(tf.string, shape=[])
             iterator = tf.data.Iterator.from_string_handle(handle, training_dataset.output_types, training_dataset.output_shapes)
